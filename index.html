@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>포모도로 타이머</title>
+<style>
+  :root { --accent: #e5533d; --bg: #fdf3f1; }
+  body.short { --accent: #2e9d8f; --bg: #eef8f6; }
+  body.long  { --accent: #3b6fd1; --bg: #eef2fb; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: "Pretendard", "Malgun Gothic", system-ui, sans-serif;
+    background: var(--bg); color: #222; transition: background .4s;
+  }
+  .card {
+    background: #fff; border-radius: 24px; padding: 32px 28px; width: 360px; max-width: 92vw;
+    box-shadow: 0 10px 40px rgba(0,0,0,.08); text-align: center;
+  }
+  .tabs { display: flex; gap: 6px; justify-content: center; margin-bottom: 20px; }
+  .tabs button {
+    border: none; background: #f1f1f1; padding: 8px 12px; border-radius: 999px; cursor: pointer;
+    font-size: 14px; color: #555; font-family: inherit;
+  }
+  .tabs button.active { background: var(--accent); color: #fff; }
+  .mascot { margin: -8px auto 10px; }
+  .mascot svg { display: block; margin: 0 auto; }
+  .mascot .eyes, .mascot .zzz { display: none; }
+  .mascot[data-state=idle] .idle, .mascot[data-state=focus] .focus,
+  .mascot[data-state=rest] .rest, .mascot[data-state=rest] .zzz { display: inline; }
+  .mascot[data-state=focus] svg { animation: bob 1.2s ease-in-out infinite; }
+  .mascot[data-state=rest] svg { animation: breathe 3s ease-in-out infinite; }
+  .mascot.cheer svg { animation: jump .5s ease-out 3; }
+  @keyframes bob { 50% { transform: translateY(-3px); } }
+  @keyframes breathe { 50% { transform: scale(1.03); } }
+  @keyframes jump { 40% { transform: translateY(-14px); } }
+  .bubble { display: inline-block; margin-top: 4px; font-size: 13px; color: #666; background: #f6f6f6; padding: 4px 10px; border-radius: 10px; }
+  .ring { position: relative; width: 240px; height: 240px; margin: 0 auto; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 10; }
+  .ring .track { stroke: #eee; }
+  .ring .bar { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset .3s linear, stroke .4s; }
+  .time {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .time .digits { font-size: 56px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .time .label { font-size: 14px; color: #888; margin-top: 4px; }
+  .controls { display: flex; gap: 10px; justify-content: center; margin-top: 24px; }
+  .controls button {
+    border: none; border-radius: 14px; padding: 12px 20px; font-size: 16px; cursor: pointer; font-family: inherit;
+  }
+  #startBtn { background: var(--accent); color: #fff; min-width: 120px; font-weight: 600; }
+  .ghost { background: #f1f1f1; color: #444; }
+  .count { margin-top: 18px; color: #666; font-size: 14px; }
+  .dots { margin-top: 6px; letter-spacing: 4px; color: var(--accent); }
+  details { margin-top: 20px; text-align: left; font-size: 14px; }
+  summary { cursor: pointer; color: #666; text-align: center; }
+  .settings { display: grid; grid-template-columns: 1fr 80px; gap: 8px 12px; margin-top: 12px; align-items: center; }
+  .settings input[type=number] { width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+  .settings .full { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="tabs">
+    <button data-mode="work" class="active">집중</button>
+    <button data-mode="short">짧은 휴식</button>
+    <button data-mode="long">긴 휴식</button>
+  </div>
+
+  <div class="mascot" id="mascot" title="몽실이">
+    <svg viewBox="0 0 120 110" width="120" height="110">
+      <!-- 대나무 -->
+      <rect x="100" y="38" width="6" height="64" rx="3" fill="#7cb342"/>
+      <path d="M100 58 h6 M100 80 h6" stroke="#558b2f" stroke-width="2"/>
+      <path d="M106 50 C114 44 118 46 118 46 C114 52 110 52 106 52Z" fill="#8bc34a"/>
+      <!-- 귀 -->
+      <circle cx="26" cy="28" r="13" fill="#2b2b2b"/>
+      <circle cx="94" cy="28" r="13" fill="#2b2b2b"/>
+      <!-- 얼굴 -->
+      <ellipse cx="60" cy="62" rx="44" ry="39" fill="#fff" stroke="#e6e6e6" stroke-width="2"/>
+      <!-- 눈 주변 무늬 -->
+      <ellipse cx="42" cy="60" rx="10" ry="13" transform="rotate(25 42 60)" fill="#2b2b2b"/>
+      <ellipse cx="78" cy="60" rx="10" ry="13" transform="rotate(-25 78 60)" fill="#2b2b2b"/>
+      <!-- 볼 -->
+      <ellipse cx="30" cy="78" rx="6" ry="4" fill="#ffc7d1"/>
+      <ellipse cx="90" cy="78" rx="6" ry="4" fill="#ffc7d1"/>
+      <!-- 눈: 상태별 -->
+      <g class="eyes focus"><circle cx="43" cy="61" r="4" fill="#fff"/><circle cx="77" cy="61" r="4" fill="#fff"/>
+        <circle cx="43.5" cy="61.5" r="2.2" fill="#2b2b2b"/><circle cx="76.5" cy="61.5" r="2.2" fill="#2b2b2b"/>
+        <path d="M33 44 L48 48 M87 44 L72 48" stroke="#2b2b2b" stroke-width="2.5" stroke-linecap="round"/></g>
+      <g class="eyes idle"><circle cx="43" cy="61" r="4.5" fill="#fff"/><circle cx="77" cy="61" r="4.5" fill="#fff"/>
+        <circle cx="43" cy="61" r="2.6" fill="#2b2b2b"/><circle cx="77" cy="61" r="2.6" fill="#2b2b2b"/></g>
+      <g class="eyes rest"><path d="M38 62 Q43 66 48 62 M72 62 Q77 66 82 62" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"/></g>
+      <!-- 코와 입 -->
+      <ellipse cx="60" cy="74" rx="5" ry="3.5" fill="#2b2b2b"/>
+      <path d="M60 77 v3 M54 81 Q57 84 60 80 Q63 84 66 81" stroke="#2b2b2b" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <!-- Zzz -->
+      <text class="zzz" x="8" y="14" font-size="14" font-weight="700" fill="#888">z<tspan dx="2" dy="-6" font-size="11">z</tspan></text>
+    </svg>
+    <div class="bubble" id="bubble">같이 집중해볼까요?</div>
+  </div>
+
+  <div class="ring">
+    <svg width="240" height="240">
+      <circle class="track" cx="120" cy="120" r="110"></circle>
+      <circle class="bar" id="bar" cx="120" cy="120" r="110"></circle>
+    </svg>
+    <div class="time">
+      <div class="digits" id="digits">25:00</div>
+      <div class="label" id="label">집중 시간</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="startBtn">시작</button>
+    <button id="resetBtn" class="ghost" title="초기화">↺</button>
+    <button id="skipBtn" class="ghost" title="다음 단계로">⏭</button>
+  </div>
+
+  <div class="count">완료한 포모도로: <b id="done">0</b>개</div>
+  <div class="dots" id="dots"></div>
+
+  <details>
+    <summary>설정</summary>
+    <div class="settings">
+      <label for="sWork">집중 (분)</label><input type="number" id="sWork" min="1" max="120">
+      <label for="sShort">짧은 휴식 (분)</label><input type="number" id="sShort" min="1" max="60">
+      <label for="sLong">긴 휴식 (분)</label><input type="number" id="sLong" min="1" max="60">
+      <label for="sEvery">긴 휴식 주기 (회)</label><input type="number" id="sEvery" min="2" max="10">
+      <label class="full"><input type="checkbox" id="sAuto"> 다음 단계 자동 시작</label>
+      <label class="full"><input type="checkbox" id="sSound"> 종료 알림음</label>
+    </div>
+  </details>
+</div>
+
+<script>
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+const LABELS ={ work: '집중 시간', short: '짧은 휴식', long: '긴 휴식' };
+const DEFAULTS = { work: 25, short: 5, long: 15, every: 4, auto: false, sound: true };
+const settings = Object.assign({}, DEFAULTS, JSON.parse(store.get('pomo-settings') || '{}'));
+
+let mode = 'work';
+let total = settings.work * 60;
+let remaining = total;
+let endAt = null;      // timestamp when running
+let tickId = null;
+let done = Number(store.get('pomo-done-' + new Date().toDateString()) || 0);
+
+const $ = id => document.getElementById(id);
+const bar = $('bar');
+const C = 2 * Math.PI * 110;
+bar.style.strokeDasharray = C;
+
+function fmt(s) {
+  const m = Math.floor(s / 60), r = s % 60;
+  return String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
+}
+
+function render() {
+  $('digits').textContent = fmt(remaining);
+  $('label').textContent = LABELS[mode];
+  bar.style.strokeDashoffset = C * (1 - remaining / total);
+  document.title = (endAt ? '▶ ' : '') + fmt(remaining) + ' · ' + LABELS[mode];
+  $('startBtn').textContent = endAt ? '일시정지' : (remaining < total ? '계속' : '시작');
+  $('done').textContent = done;
+  const inCycle = done % settings.every;
+  $('dots').textContent = '●'.repeat(inCycle) + '○'.repeat(settings.every - inCycle);
+  document.body.className = mode === 'work' ? '' : mode;
+  const m = $('mascot');
+  m.dataset.state = !endAt ? (mode === 'work' ? 'idle' : 'rest') : (mode === 'work' ? 'focus' : 'rest');
+  if (!m.classList.contains('cheer')) {
+    $('bubble').textContent = mode !== 'work' ? '대나무 먹으면서 쉬는 중~'
+      : endAt ? (remaining <= 60 ? '거의 다 왔어요!' : '집중 중... 화이팅!')
+      : '같이 집중해볼까요?';
+  }
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+}
+
+function setMode(m) {
+  pause();
+  mode = m;
+  total = settings[m] * 60;
+  remaining = total;
+  render();
+}
+
+function start() {
+  if (endAt) return;
+  endAt = Date.now() + remaining * 1000;
+  tickId = setInterval(tick, 250);
+  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+  render();
+}
+
+function pause() {
+  if (!endAt) return;
+  clearInterval(tickId);
+  remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+  endAt = null;
+  render();
+}
+
+function tick() {
+  remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+  if (remaining <= 0) return finish();
+  render();
+}
+
+function finish() {
+  clearInterval(tickId);
+  endAt = null;
+  let next;
+  if (mode === 'work') {
+    done++;
+    store.set('pomo-done-' + new Date().toDateString(), done);
+    next = done % settings.every === 0 ? 'long' : 'short';
+  } else {
+    next = 'work';
+  }
+  alertUser(mode === 'work' ? '집중 완료! 잠시 쉬어가세요.' : '휴식 끝! 다시 집중해볼까요?');
+  setMode(next);
+  if (settings.auto) start();
+}
+
+function alertUser(msg) {
+  const m = $('mascot');
+  m.classList.remove('cheer'); void m.offsetWidth; m.classList.add('cheer');
+  $('bubble').textContent = msg;
+  setTimeout(() => { m.classList.remove('cheer'); render(); }, 4000);
+  if (settings.sound) beep();
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('포모도로 타이머', { body: msg });
+  }
+}
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.35, 0.7].forEach(t => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.value = 880;
+      o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.3);
+      o.start(ctx.currentTime + t);
+      o.stop(ctx.currentTime + t + 0.3);
+    });
+  } catch (e) {}
+}
+
+// 이벤트
+$('startBtn').onclick = () => endAt ? pause() : start();
+$('resetBtn').onclick = () => setMode(mode);
+$('skipBtn').onclick = () => { pause(); remaining = 0; finish(); };
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); $('startBtn').click(); }
+});
+
+// 설정
+const fields = { sWork: 'work', sShort: 'short', sLong: 'long', sEvery: 'every' };
+for (const [id, key] of Object.entries(fields)) {
+  $(id).value = settings[key];
+  $(id).onchange = () => {
+    const v = Math.max(Number($(id).min), Math.min(Number($(id).max), parseInt($(id).value) || DEFAULTS[key]));
+    $(id).value = v;
+    settings[key] = v;
+    save();
+    if (!endAt && remaining === total) setMode(mode); else render();
+  };
+}
+$('sAuto').checked = settings.auto;
+$('sSound').checked = settings.sound;
+$('sAuto').onchange = () => { settings.auto = $('sAuto').checked; save(); };
+$('sSound').onchange = () => { settings.sound = $('sSound').checked; save(); };
+function save() { store.set('pomo-settings', JSON.stringify(settings)); }
+
+setMode('work');
+</script>
+</body>
+</html>
